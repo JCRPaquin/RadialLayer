@@ -1,0 +1,7 @@
+torch
+torchvision
+lightning
+wandb
+
+pandas
+plotly
