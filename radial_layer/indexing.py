@@ -8,6 +8,8 @@ them as constants.
 from copy import deepcopy
 from typing import List
 
+import torch
+
 
 def get_indices(max_depth: int) -> List[List[int]]:
     """
@@ -79,3 +81,13 @@ def path_indices(bin_indices: List[List[int]]) -> List[List[int]]:
         indices.append(head[:-1])
 
     return [paths[idx] for idx in range(num_nodes)]
+
+
+def get_indexing_matrix(indices: List[List[int]]) -> torch.Tensor:
+    indexing_matrix = torch.zeros(len(indices), max(n for l in indices for n in l)+1)
+
+    for selection_index, selection in enumerate(indices):
+        for index in selection:
+            indexing_matrix[selection_index, index] = 1.0
+
+    return indexing_matrix
