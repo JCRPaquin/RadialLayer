@@ -247,6 +247,13 @@ class PartialRadialLayer(nn.Module):
 
         return -self.spread_lambda * reweighted_cross_entropy.sum()
 
+    @torch.jit.export
+    def plot_distribution(self):
+        decisions = self.decisions_by_angles(torch.linspace(0, 1, 100))
+        distributions = self.make_distribution(decisions)
+
+        return distributions.detach()
+
 
 class MultiAxisRadialLayer(nn.Module):
     """
