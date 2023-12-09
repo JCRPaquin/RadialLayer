@@ -4,16 +4,17 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from .indexing import get_indices
+from .indexing import get_indices, path_indices
 
 
-def dist_fn_from_idx(indices: torch.Tensor) -> Callable[[torch.Tensor], torch.Tensor]:
+def dist_fn_from_idx(indices: torch.Tensor, include_null_element: bool = False) -> Callable[[torch.Tensor], torch.Tensor]:
     """
     Produces lambdas (to be compiled with `torch.jit.trace`) that treat a given set of indices as
     a constant, enabling better optimization of the resulting function.
 
     Can be used to compute bin distribution as well as path probabilities for interior nodes.
 
+    :param include_null_element: Whether to include an extra column of 1s in the intermediate tensor
     :param indices: Indices for calculating a distribution
     :return: A lambda that takes a tensor of probabilities and returns a distribution
     """
@@ -21,10 +22,17 @@ def dist_fn_from_idx(indices: torch.Tensor) -> Callable[[torch.Tensor], torch.Te
     bin_count = indices.shape[0]
     tree_depth = indices.shape[1]
 
-    return lambda probs: torch.hstack([
-        probs,
-        1-probs
-    ]).index_select(1, flat_view).view(probs.shape[0], bin_count, tree_depth).prod(dim=2)
+    if not include_null_element:
+        return lambda probs: torch.hstack([
+            probs,
+            1-probs
+        ]).index_select(1, flat_view).view(probs.shape[0], bin_count, tree_depth).prod(dim=2)
+    else:
+        return lambda probs: torch.hstack([
+            probs,
+            1-probs,
+            torch.ones(probs.shape[0], 1)
+        ]).index_select(1, flat_view).view(probs.shape[0], bin_count, tree_depth).prod(dim=2)
 
 class PartialRadialLayer(nn.Module):
     """
@@ -46,29 +54,41 @@ class PartialRadialLayer(nn.Module):
     quantiles: torch.Tensor
 
     make_distribution: torch.jit.ScriptModule
+    make_path_probs: torch.jit.ScriptModule
 
-    def __init__(self, input_width: int, depth: int, inner_width: int):
+    def __init__(self, input_width: int, depth: int, inner_width: int, spread_lambda: float = 1.0):
         super().__init__()
 
-        self.input_width = input_width
         self.depth = depth
+        self.input_width = input_width
         self.inner_width = inner_width
+
+        dist_list = get_indices(depth)
+        dist_idx = torch.Tensor(dist_list).long()
+        self.make_distribution = torch.jit.trace(dist_fn_from_idx(dist_idx),
+                                                 example_inputs=torch.ones(2, 2**depth-1, requires_grad=True))
+
+        path_idx = torch.Tensor(path_indices(dist_list)).long()
+        self.make_path_probs = torch.jit.trace(dist_fn_from_idx(path_idx, include_null_element=True),
+                                               example_inputs=torch.ones(2, 2**depth-1, requires_grad=True))
 
         self.ray = nn.Parameter(torch.zeros((1, input_width)), requires_grad=True)
         nn.init.kaiming_normal_(self.ray)
 
-        # Max derivative of sigmoid(a*(x + b)) is at -b
+        # Max derivative of sigmoid(a*(w*x + b)) is at -b/w
         self.a_i = nn.Parameter(5 * torch.ones((1, 2 ** depth - 1)), requires_grad=False)
         self.w_i = nn.Parameter(torch.zeros((1, 2 ** depth - 1)), requires_grad=False)
         self.b_i = nn.Parameter(torch.ones((1, 2 ** depth - 1)), requires_grad=False)
+
+        self.spread_lambda = spread_lambda
+        self.spread_penalty_multiplier = nn.Parameter(torch.ones_like(self.b_i), requires_grad=False)
+        self.ema_weights = nn.Parameter(torch.zeros_like(self.b_i), requires_grad=False)
+        self.ema_history = nn.Parameter(torch.zeros_like(self.b_i), requires_grad=False)
+
         self.init_tree_weights()
 
         self.inner_transforms = nn.Parameter(torch.ones((2 ** depth, input_width, inner_width)), requires_grad=True)
         self.init_transform_weights()
-
-        dist_idx = torch.Tensor(get_indices(depth)).long()
-        self.make_distribution = torch.jit.trace(dist_fn_from_idx(dist_idx),
-                                                 example_inputs=torch.ones(2, 2**depth-1, requires_grad=True))
 
     def init_tree_weights(self):
         """
@@ -84,13 +104,21 @@ class PartialRadialLayer(nn.Module):
             for node in range(n_nodes):
                 idx = used + node
                 self.b_i[0][idx] = -(2 * node + 1) / div
+                self.spread_penalty_multiplier[0][idx] = 1/2**i
+                self.ema_weights[0][idx] = 1/2**(self.depth-i)
 
             used += n_nodes
 
         self.quantile_targets = -self.b_i.detach().clone()
         self.quantiles = self.quantile_targets.clone()
 
+        # We take sigmoid(b_i) during a forward pass, so invert that here
         self.b_i = nn.Parameter(torch.log(-self.b_i / (1 + self.b_i)).detach(), requires_grad=False)
+
+        # Initialize moving average history
+        init_decisions = self.decisions_by_angles(torch.linspace(0, 1, 64))
+        alpha_values = self.calculate_alpha(init_decisions)
+        self.ema_history.copy_(alpha_values)
 
     def toggle_inner_node_gradients(self, requires_grad=False):
         self.w_i.requires_grad = requires_grad
@@ -147,21 +175,17 @@ class PartialRadialLayer(nn.Module):
         Most of that time is spent in the torch.cat call.
         """
         angles = self.angles(x)
-        node_fns = (0.5 + torch.sigmoid(self.w_i)) * angles.unsqueeze(-1) - torch.sigmoid(self.b_i)
-        decisions = F.sigmoid(node_fns * (1 + self.a_i))
+        decisions = self.decisions_by_angles(angles)
 
         distribution = self.make_distribution(decisions)
 
         return distribution
 
-    @torch.jit.export
-    def distribution_by_angles(self, angles: torch.Tensor) -> torch.Tensor:
+    def decisions_by_angles(self, angles: torch.Tensor) -> torch.Tensor:
         node_fns = (0.5 + torch.sigmoid(self.w_i)) * angles.unsqueeze(-1) - torch.sigmoid(self.b_i)
         decisions = F.sigmoid(node_fns * (1 + self.a_i))
 
-        distribution = self.make_distribution(decisions)
-
-        return distribution
+        return decisions
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
@@ -195,6 +219,14 @@ class PartialRadialLayer(nn.Module):
 
         return inner_fns
 
+    def calculate_alpha(self, decisions: torch.Tensor) -> torch.Tensor:
+        path_probs: torch.Tensor = self.make_path_probs(decisions)
+
+        numerator = (path_probs * decisions).sum(dim=0)
+        denominator = path_probs.sum(dim=0)
+
+        return numerator/denominator
+
     @torch.jit.export
     def spread_loss(self, x: torch.Tensor) -> torch.Tensor:
         """
@@ -204,12 +236,16 @@ class PartialRadialLayer(nn.Module):
         """
         assert x.shape == (x.shape[0], self.input_width)
 
-        decisions, angles = self.scaled_distribution(x)
-        anti_decisions = F.softmax(decisions.mean(dim=0) * 100, dim=0)
-        non_primary_decisions = decisions + (1 - anti_decisions)
-        spread = F.kl_div(decisions.log(), F.softmax(non_primary_decisions * 100, dim=1))
+        angles = self.angles(x)
+        decisions = self.decisions_by_angles(angles)
+        alpha_values = self.calculate_alpha(decisions)
+        adjusted_alpha_values = self.ema_weights*self.ema_history + (1-self.ema_weights)*alpha_values
+        self.ema_history.copy_(adjusted_alpha_values.detach())
 
-        return spread
+        per_node_cross_entropy = 0.5*torch.log(adjusted_alpha_values) + 0.5*torch.log(1-adjusted_alpha_values)
+        reweighted_cross_entropy = per_node_cross_entropy*self.spread_penalty_multiplier
+
+        return -self.spread_lambda * reweighted_cross_entropy.sum()
 
 
 class MultiAxisRadialLayer(nn.Module):
