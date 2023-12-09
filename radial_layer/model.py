@@ -195,6 +195,7 @@ class PartialRadialLayer(nn.Module):
 
         return inner_fns
 
+    @torch.jit.export
     def spread_loss(self, x: torch.Tensor) -> torch.Tensor:
         """
         Encourage the model's overall bin distribution to tend towards a uniform distribution.
