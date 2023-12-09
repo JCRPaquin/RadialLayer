@@ -1,6 +1,9 @@
+from typing import Tuple
+
 import pytorch_lightning as pl
 
 import torch
+import wandb
 from pytorch_lightning.callbacks import EarlyStopping
 from pytorch_lightning.loggers import WandbLogger
 from torch import nn
@@ -12,34 +15,48 @@ from .data.mnist import MNISTDataModule
 
 class PartialRadialLayerMNISTClassifier(pl.LightningModule):
 
-    def __init__(self, lr_rate):
+    rl1: PartialRadialLayer
+    bn: nn.BatchNorm1d
+    act_fn: nn.Module
+    rl2: PartialRadialLayer
+    out_fn: nn.LogSoftmax
+
+    lr_rate: float
+
+    def __init__(self, lr_rate: float):
         super().__init__()
 
         # mnist images are (1, 28, 28) (channels, width, height)
-        self.rl1 = PartialRadialLayer(input_width=28*28, inner_width=8, depth=3)
+        self.rl1 = torch.jit.script(PartialRadialLayer(input_width=28*28, inner_width=8, depth=3, spread_lambda=1.0))
+        self.rl1.b_i.requires_grad=True
+        self.rl1.w_i.requires_grad=True
         self.bn = nn.BatchNorm1d(8)
         self.act_fn = nn.GELU()
-        self.rl2 = PartialRadialLayer(input_width=8, inner_width=10, depth=3)
+        self.rl2 = torch.jit.script(PartialRadialLayer(input_width=8, inner_width=10, depth=3, spread_lambda=1.0))
+        self.rl2.b_i.requires_grad=True
+        self.rl2.w_i.requires_grad=True
         self.out_fn = nn.LogSoftmax()
 
         self.lr_rate = lr_rate
 
-    def forward(self, x):
+    def forward(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         batch_size, channels, width, height = x.size()
 
         # (b, 1, 28, 28) -> (b, 1*28*28)
         x = x.view(batch_size, -1)
 
         # inner layers (b, 1*28*28) -> (b, 10)
+        rl1_spread_loss = self.rl1.spread_loss(x)
         x = self.rl1(x)
         x = self.bn(x)
         x = self.act_fn(x)
+        rl2_spread_loss = self.rl2.spread_loss(x)
         x = self.rl2(x)
         x = self.out_fn(x)
 
-        return x
+        return x, rl1_spread_loss + rl2_spread_loss
 
-    def eval_forward(self, x):
+    def eval_forward(self, x: torch.Tensor) -> torch.Tensor:
         batch_size, channels, width, height = x.size()
 
         # (b, 1, 28, 28) -> (b, 1*28*28)
@@ -59,16 +76,17 @@ class PartialRadialLayerMNISTClassifier(pl.LightningModule):
 
     def training_step(self, train_batch, batch_idx):
         x, y = train_batch
-        soft_logits = self.forward(x)
+        soft_logits, spread_loss = self.forward(x)
         soft_loss = self.cross_entropy_loss(soft_logits, y)
         hard_logits = self.eval_forward(x)
         hard_loss = self.cross_entropy_loss(hard_logits, y)
 
-        loss = soft_loss + hard_loss
+        loss = soft_loss + hard_loss + spread_loss
 
         self.log('train/loss', loss.detach().item())
         self.log('train/soft_loss', soft_loss.detach().item())
         self.log('train/hard_loss', hard_loss.detach().item())
+        self.log('train/spread_loss', spread_loss.detach().item())
         return {"loss": loss}
 
     def validation_step(self, val_batch, batch_idx):
@@ -82,6 +100,9 @@ class PartialRadialLayerMNISTClassifier(pl.LightningModule):
 
         self.log('val/hard_loss', loss.detach().item())
         self.log('val/accuracy', accuracy.detach().item())
+        self.logger.experiment.log({
+            'val/rl1_dist_plot': wandb.Image(self.rl1.plot_distribution().T)
+        })
         return {"loss": loss}
 
     def test_step(self, val_batch, batch_idx):
