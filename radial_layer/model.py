@@ -163,7 +163,7 @@ class PartialRadialLayer(nn.Module):
         """
         assert x.shape == (x.shape[0], self.input_width)
 
-        scaled_distribution, _ = self.scaled_distribution(x)
+        scaled_distribution = self.scaled_distribution(x)
 
         inner_transform = torch.einsum('bi,liw->blw', x, self.inner_transforms)
 
@@ -180,7 +180,7 @@ class PartialRadialLayer(nn.Module):
         """
         assert x.shape == (x.shape[0], self.input_width)
 
-        scaled_distribution, _ = self.scaled_distribution(x)
+        scaled_distribution = self.scaled_distribution(x)
         bins = torch.argmax(scaled_distribution, dim=1)
 
         # self.inner_transforms likely copies memory? Need something more efficient
