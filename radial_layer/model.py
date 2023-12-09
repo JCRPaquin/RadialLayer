@@ -154,6 +154,7 @@ class PartialRadialLayer(nn.Module):
 
         return distribution
 
+    @torch.jit.export
     def distribution_by_angles(self, angles: torch.Tensor) -> torch.Tensor:
         node_fns = (0.5 + torch.sigmoid(self.w_i)) * angles.unsqueeze(-1) - torch.sigmoid(self.b_i)
         decisions = F.sigmoid(node_fns * (1 + self.a_i))
@@ -176,6 +177,7 @@ class PartialRadialLayer(nn.Module):
 
         return weighted_output
 
+    @torch.jit.export
     def eval_forward(self, x: torch.Tensor) -> torch.Tensor:
         """
         Run the model with "hard" binning, i.e. use torch.argmax
