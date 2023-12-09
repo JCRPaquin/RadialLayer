@@ -9,6 +9,11 @@ from .indexing import get_indices
 
 def dist_fn_from_idx(indices: torch.Tensor) -> Callable[[torch.Tensor], torch.Tensor]:
     """
+    Produces lambdas (to be compiled with `torch.jit.trace`) that treat a given set of indices as
+    a constant, enabling better optimization of the resulting function.
+
+    Can be used to compute bin distribution as well as path probabilities for interior nodes.
+
     :param indices: Indices for calculating a distribution
     :return: A lambda that takes a tensor of probabilities and returns a distribution
     """
