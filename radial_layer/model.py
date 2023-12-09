@@ -131,7 +131,7 @@ class PartialRadialLayer(nn.Module):
         Notes:
         - Masking doesn't confer much in the way of performance and might even contribute to overfitting.
         """
-        # Technically not required but I prefer the values to be in [0,1]
+        # Technically not required, but I prefer the values to be in [0,1]
         angles = torch.arccos(F.cosine_similarity(x, self.ray)) / torch.pi
 
         return angles
