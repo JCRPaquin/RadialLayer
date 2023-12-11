@@ -99,6 +99,8 @@ class PartialRadialLayerMNISTClassifier(pl.LightningModule):
 
     def validation_step(self, val_batch, batch_idx):
         x, y = val_batch
+        buckets = self.rl1.scaled_distribution(x.view(-1, 28*28))
+        buckets = torch.argmax(buckets, dim=1)
         logits = self.eval_forward(x)
         loss = self.cross_entropy_loss(logits, y)
 
@@ -111,6 +113,19 @@ class PartialRadialLayerMNISTClassifier(pl.LightningModule):
         self.logger.experiment.log({
             'val/rl1_dist_plot': wandb.Image(self.rl1.plot_distribution().T)
         })
+
+        bucket_totals = dict()
+        for i in range(x.shape[0]):
+            bucket = int(buckets[i].item())
+            if bucket in bucket_totals:
+                bucket_totals[bucket] += 1
+            else:
+                bucket_totals[bucket] = 1
+
+        for i in range(2**self.rl1.depth):
+            self.log(f'val/total_bucket_{i}', bucket_totals.get(i, 0))
+
+        print(self.rl1.ema_history)
         return {"loss": loss}
 
     def test_step(self, val_batch, batch_idx):
