@@ -147,11 +147,11 @@ if __name__ == "__main__":
     data = MNISTDataModule()
 
     # Set Early Stopping
-    early_stopping = EarlyStopping('val/hard_loss', mode='min', patience=5)
+    early_stopping = EarlyStopping('val/hard_loss', mode='min', patience=10)
     # Log to wandb
     wandb_logger = WandbLogger(project="RadialLayer")
     wandb_logger.experiment.log_code(".")
 
-    trainer = pl.Trainer(max_epochs=30, callbacks=[early_stopping],
+    trainer = pl.Trainer(max_epochs=100, callbacks=[early_stopping],
                          logger=wandb_logger)
     trainer.fit(model, data)
