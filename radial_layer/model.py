@@ -272,14 +272,20 @@ class PartialRadialLayer(nn.Module):
 
         angles = self.angles(x)
         decisions = self.decisions_by_angles(angles)
+        distributions = self.make_distribution(decisions)
         alpha_values = self.calculate_alpha(decisions)
         adjusted_alpha_values = self.ema_weights*self.ema_history + (1-self.ema_weights)*alpha_values
         self.ema_history.copy_(adjusted_alpha_values.detach())
 
+        # Try to get each interior node to a 50:50 left/right balance (adapted from Frosst 2017)
         per_node_cross_entropy = 0.5*torch.log(adjusted_alpha_values) + 0.5*torch.log(1-adjusted_alpha_values)
         reweighted_cross_entropy = per_node_cross_entropy*self.spread_penalty_multiplier
 
-        return -self.spread_lambda * reweighted_cross_entropy.sum()
+        # Try to load balance across all experts
+        imp: torch.Tensor = distributions.sum(dim=0)
+        load_balancing_loss = (imp.std()/imp.mean())**2
+
+        return -self.spread_lambda * reweighted_cross_entropy.sum() + load_balancing_loss
 
     @torch.jit.export
     def plot_distribution(self):
