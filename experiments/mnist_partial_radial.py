@@ -80,6 +80,8 @@ class PartialRadialLayerMNISTClassifier(pl.LightningModule):
         soft_loss = self.cross_entropy_loss(soft_logits, y)
         hard_logits = self.eval_forward(x)
         hard_loss = self.cross_entropy_loss(hard_logits, y)
+        tree_loss = self.rl1.tree_loss() + self.rl2.tree_loss()
+        #tree_loss = (tree_loss + torch.abs(tree_loss))/2
 
         loss = soft_loss + hard_loss + spread_loss
 
@@ -87,6 +89,12 @@ class PartialRadialLayerMNISTClassifier(pl.LightningModule):
         self.log('train/soft_loss', soft_loss.detach().item())
         self.log('train/hard_loss', hard_loss.detach().item())
         self.log('train/spread_loss', spread_loss.detach().item())
+        self.log('train/tree_loss', tree_loss.detach().item())
+
+        node_splits = F.sigmoid(self.rl1.b_i)/(0.5+F.sigmoid(self.rl1.w_i))
+        for i in range(node_splits.shape[1]):
+            self.log(f'train/node_split_{i}', node_splits[0][i].detach().item())
+
         return {"loss": loss}
 
     def validation_step(self, val_batch, batch_idx):
