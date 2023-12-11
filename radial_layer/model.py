@@ -128,14 +128,16 @@ class PartialRadialLayer(nn.Module):
         # Open to suggestions wrt alternative init schemes
         nn.init.kaiming_normal_(self.inner_transforms)
 
+    @torch.jit.export
     def tree_loss(self) -> torch.Tensor:
 
-        node_values = -torch.sigmoid(self.b_i) / (0.5 + torch.sigmoid(self.w_i))
+        node_values = torch.sigmoid(self.b_i) / (0.5 + torch.sigmoid(self.w_i))
 
         loss = torch.zeros(1)
         used = 0
         for i in range(self.depth - 1):
-            n_nodes = 2 ** i
+            prev_used = int(used - 2**(i-1))
+            n_nodes = int(2 ** i)
 
             for node in range(n_nodes):
                 idx = used + node
@@ -145,8 +147,25 @@ class PartialRadialLayer(nn.Module):
                 left_value = node_values[0][left_child_idx]
                 right_value = node_values[0][left_child_idx + 1]
 
-                loss -= self_value - left_value
-                loss -= right_value - self_value
+                #loss -= self_value - left_value
+                #loss -= right_value - self_value
+
+                centering_loss = torch.zeros(1)
+                if i > 0:
+                    parent_idx = prev_used + (idx + (idx % 2) - prev_used) // 2
+                    parent_value = node_values[0][parent_idx]
+                    is_left_child = idx%2 == 1
+                    midpoint = (self_value + parent_value)/2
+
+                    if is_left_child:
+                        centering_loss += (right_value - midpoint)**2
+                        child_midpoint = (parent_value + left_value)/2
+                    else:
+                        centering_loss += (left_value - midpoint)**2
+                        child_midpoint = (parent_value + right_value)/2
+
+                    centering_loss += (self_value - child_midpoint) ** 2
+                    loss += centering_loss
 
             used += n_nodes
 
