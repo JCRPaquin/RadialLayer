@@ -73,6 +73,7 @@ class PartialRadialLayer(nn.Module):
                                                example_inputs=torch.ones(2, 2**depth-1, requires_grad=True))
 
         self.ray = nn.Parameter(torch.zeros((1, input_width)), requires_grad=True)
+        self.angle_mean = torch.ones(1)*0.5
         nn.init.kaiming_normal_(self.ray)
 
         # Max derivative of sigmoid(a*(w*x + b)) is at -b/w
@@ -169,6 +170,9 @@ class PartialRadialLayer(nn.Module):
 
             used += n_nodes
 
+        loss -= 0.1*((node_values[0,1:]-self.angle_mean)**2).sum()
+        loss += (node_values[0,0]-self.angle_mean)**2
+
         return loss
 
     def angles(self, x: torch.Tensor) -> torch.Tensor:
@@ -180,6 +184,10 @@ class PartialRadialLayer(nn.Module):
         """
         # Technically not required, but I prefer the values to be in [0,1]
         angles = torch.arccos(F.cosine_similarity(x, self.ray)) / torch.pi
+
+        if self.training:
+            with torch.no_grad():
+                self.angle_mean = 0.2*self.angle_mean + 0.8*angles.mean()
 
         return angles
 
