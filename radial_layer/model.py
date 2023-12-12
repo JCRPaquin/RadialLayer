@@ -221,9 +221,6 @@ class PartialRadialLayer(nn.Module):
         assert x.shape == (x.shape[0], self.input_width)
 
         scaled_distribution = self.scaled_distribution(x)
-        #mean_distribution = F.softmax(10*scaled_distribution.mean(dim=0), dim=0)
-        #scaled_distribution = scaled_distribution + 10*(1-mean_distribution)
-        #scaled_distribution = F.softmax(scaled_distribution, dim=1)
         top_bucket_idx = scaled_distribution.topk(1, dim=1)
         scaled_distribution = F.softmax(
             scaled_distribution.scatter(dim=1, index=top_bucket_idx.indices, value=0.),
