@@ -121,6 +121,7 @@ class PartialRadialLayer(nn.Module):
         self.ema_history.copy_(alpha_values)
 
     def toggle_inner_node_gradients(self, requires_grad=False):
+        self.a_i.requires_grad = requires_grad
         self.w_i.requires_grad = requires_grad
         self.b_i.requires_grad = requires_grad
 
