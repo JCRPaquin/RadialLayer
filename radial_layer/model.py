@@ -302,13 +302,14 @@ class MultiAxisRadialLayer(nn.Module):
     more parallelizable design.
     """
 
-    def __init__(self, n_axes: int, input_width: int, inner_width: int, depth: int):
+    def __init__(self, n_axes: int, input_width: int, inner_width: int, spread_lambda: float, depth: int):
         super().__init__()
 
         self.segments = nn.ModuleList([
             PartialRadialLayer(input_width=input_width,
                                depth=depth,
-                               inner_width=inner_width)
+                               inner_width=inner_width,
+                               spread_lambda=spread_lambda)
             for _ in range(n_axes)
         ])
 
@@ -334,7 +335,7 @@ class MultiAxisRadialLayer(nn.Module):
                 if i >= j:
                     continue
 
-                loss += F.cosine_similarity(self.segments[i].axis, self.segments[j].axis) ** 2
+                loss += F.cosine_similarity(self.segments[i].ray, self.segments[j].ray) ** 2
 
         return loss
 
