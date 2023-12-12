@@ -144,7 +144,7 @@ class PartialRadialLayerMNISTClassifier(pl.LightningModule):
         return {"loss": loss}
 
     def configure_optimizers(self):
-        optimizer = torch.optim.Adam(self.parameters(), lr=self.lr_rate)
+        optimizer = torch.optim.AdamW(self.parameters(), lr=self.lr_rate, weight_decay=0.01)
         lr_scheduler = {'scheduler': torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.95),
                         'name': 'expo_lr'}
         return [optimizer], [lr_scheduler]
