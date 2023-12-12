@@ -170,8 +170,7 @@ class PartialRadialLayer(nn.Module):
 
             used += n_nodes
 
-        loss -= 0.1*((node_values[0,1:]-self.angle_mean)**2).sum()
-        loss += (node_values[0,0]-self.angle_mean)**2
+        loss += ((node_values-self.quantiles)**2).mean()
 
         return loss
 
@@ -188,6 +187,8 @@ class PartialRadialLayer(nn.Module):
         if self.training:
             with torch.no_grad():
                 self.angle_mean = 0.2*self.angle_mean + 0.8*angles.mean()
+                self.quantiles = 0.2*self.quantiles + \
+                                 0.8*angles.quantile(self.quantile_targets.view(-1)).view(self.quantiles.shape)
 
         return angles
 
