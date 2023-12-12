@@ -240,7 +240,7 @@ class PartialRadialLayer(nn.Module):
         """
         Run the model with "hard" binning, i.e. use torch.argmax
 
-        Shouldn't we be able to just multiple & truncate? Eventually, yes.
+        Shouldn't we be able to just multiply & truncate? Eventually, yes.
         For now that results in incorrect bins and I haven't debugged it.
         """
         assert x.shape == (x.shape[0], self.input_width)
