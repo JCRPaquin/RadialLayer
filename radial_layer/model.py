@@ -93,6 +93,8 @@ class PartialRadialLayer(nn.Module):
         self.ema_weights = nn.Parameter(torch.zeros_like(self.b_i), requires_grad=False)
         self.ema_history = nn.Parameter(torch.zeros_like(self.b_i), requires_grad=False)
 
+        self.load_balacing_lambda = load_balancing_lambda
+
         self.init_tree_weights()
 
         self.inner_transforms = nn.Parameter(torch.ones((2 ** depth, input_width, inner_width)), requires_grad=True)
@@ -291,7 +293,8 @@ class PartialRadialLayer(nn.Module):
         imp: torch.Tensor = distributions.sum(dim=0)
         load_balancing_loss = (imp.std()/imp.mean())**2
 
-        return -self.spread_lambda * reweighted_cross_entropy.sum() + load_balancing_loss
+        return -self.spread_lambda * reweighted_cross_entropy.sum() + \
+            self.load_balacing_lambda * load_balancing_loss
 
     @torch.jit.export
     def plot_distribution(self):
