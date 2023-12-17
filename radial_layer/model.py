@@ -79,6 +79,7 @@ class PartialRadialLayer(nn.Module):
                                                example_inputs=torch.ones(2, 2**depth-1, requires_grad=True))
 
         self.ray = nn.Parameter(torch.zeros((1, input_width)), requires_grad=True)
+        self.quantile_lambda = 10.0
         nn.init.kaiming_normal_(self.ray)
 
         # Max derivative of sigmoid(a*(w*x + b)) is at -b/w
@@ -176,7 +177,7 @@ class PartialRadialLayer(nn.Module):
 
             used += n_nodes
 
-        loss += ((node_values-self.quantiles)**2).mean()
+        loss += self.quantile_lambda*((node_values-self.quantiles)**2).mean()
 
         return loss
 
