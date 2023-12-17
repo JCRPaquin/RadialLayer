@@ -106,7 +106,10 @@ class PartialRadialLayerMNISTClassifier(pl.LightningModule):
         hard_loss = self.cross_entropy_loss(hard_logits, y)
         tree_loss = self.rl1.tree_loss() + self.rl2.tree_loss()
 
-        loss = soft_loss + hard_loss + spread_loss + tree_loss
+        if self.current_epoch > self.phase_change_epoch:
+            loss = soft_loss + hard_loss
+        else:
+            loss = soft_loss + hard_loss + spread_loss + tree_loss
 
         self.log('train/loss', loss.detach().item())
         self.log('train/soft_loss', soft_loss.detach().item())
