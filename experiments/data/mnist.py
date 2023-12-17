@@ -19,6 +19,7 @@ class MNISTDataModule(pl.LightningDataModule):
     def setup(self, stage: str):
         # transforms for images
         transform = transforms.Compose([transforms.ToTensor(),
+                                        transforms.RandomAffine(degrees=(-15, 15), translate=(0.2, 0.2)),
                                         transforms.Normalize((0.0,), (1.0,))])
 
         self.mnist_test = MNIST(self.data_dir, train=False, download=True, transform=transform)
