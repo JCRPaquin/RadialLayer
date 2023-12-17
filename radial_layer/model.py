@@ -165,13 +165,13 @@ class PartialRadialLayer(nn.Module):
                     midpoint = (self_value + parent_value)/2
 
                     if is_left_child:
-                        centering_loss += (right_value - midpoint)**2
+                        centering_loss += (right_value - midpoint)**2/4*torch.abs(self_value - midpoint)
                         child_midpoint = (parent_value + left_value)/2
                     else:
-                        centering_loss += (left_value - midpoint)**2
+                        centering_loss += (left_value - midpoint)**2/4*torch.abs(self_value - midpoint)
                         child_midpoint = (parent_value + right_value)/2
 
-                    centering_loss += (self_value - child_midpoint) ** 2
+                    centering_loss += (self_value - child_midpoint) ** 2/8*torch.abs(child_midpoint - parent_value)
                     loss += centering_loss
 
             used += n_nodes
