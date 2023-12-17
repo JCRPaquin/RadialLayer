@@ -24,14 +24,26 @@ class PartialRadialLayerMNISTClassifier(pl.LightningModule):
 
     lr_rate: float
 
-    def __init__(self, lr_rate: float):
+    def __init__(self,
+                 learning_rate: float,
+                 phase_change_epoch: int = 10,
+                 layer1_depth: int = 3,
+                 layer2_depth: int = 3,
+                 spread_lambda: float = 10.,
+                 quantile_lambda: float = 5.,
+                 max_power: int = 4):
         super().__init__()
 
         # mnist images are (1, 28, 28) (channels, width, height)
-        self.rl1 = torch.jit.script(PartialRadialLayer(input_width=28*28, inner_width=8, depth=3, spread_lambda=1.0))
+        self.rl1 = torch.jit.script(PartialRadialLayer(
+            input_width=28*28,
+            inner_width=8,
+            depth=layer1_depth,
+            spread_lambda=spread_lambda))
         self.rl1.a_i.requires_grad=True
         self.rl1.b_i.requires_grad=True
         self.rl1.w_i.requires_grad=True
+        self.rl1.quantile_lambda = quantile_lambda
         self.bn = nn.BatchNorm1d(8)
         self.act_fn = nn.GELU()
         self.power_layer = PowerLayer(input_width=8, power=max_power)
@@ -43,9 +55,11 @@ class PartialRadialLayerMNISTClassifier(pl.LightningModule):
         self.rl2.a_i.requires_grad=True
         self.rl2.b_i.requires_grad=True
         self.rl2.w_i.requires_grad=True
+        self.rl2.quantile_lambda = quantile_lambda
         self.out_fn = nn.LogSoftmax()
 
-        self.lr_rate = lr_rate
+        self.lr_rate = learning_rate
+        self.phase_change_epoch = phase_change_epoch
 
     def forward(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         batch_size, channels, width, height = x.size()
@@ -142,7 +156,6 @@ class PartialRadialLayerMNISTClassifier(pl.LightningModule):
         for i in range(self.rl1.quantiles.shape[-1]):
             self.log(f'val/rl1_quantile_{i}', self.rl1.quantiles[0,i])
 
-        print(self.rl1.ema_history)
         return {"loss": loss}
 
     def test_step(self, val_batch, batch_idx):
@@ -160,7 +173,10 @@ class PartialRadialLayerMNISTClassifier(pl.LightningModule):
         return [optimizer], [lr_scheduler]
 
 if __name__ == "__main__":
-    model = PartialRadialLayerMNISTClassifier(lr_rate=1e-3)
+    # 2e-3 is too high
+    # 1e-3 seems fine
+    # 1e-4 is too low
+    model = PartialRadialLayerMNISTClassifier(learning_rate=1e-3, phase_change_epoch=3)
     data = MNISTDataModule()
 
     # Set Early Stopping
