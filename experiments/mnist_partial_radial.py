@@ -173,7 +173,7 @@ class PartialRadialLayerMNISTClassifier(pl.LightningModule):
         optimizer = torch.optim.AdamW(self.parameters(), lr=self.lr_rate, weight_decay=0.01)
         lr_scheduler = {'scheduler': torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.95),
                         'name': 'expo_lr'}
-        return [optimizer], [lr_scheduler]
+        return [optimizer], [] #[lr_scheduler]
 
 if __name__ == "__main__":
     # 2e-3 is too high
