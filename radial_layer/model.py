@@ -56,7 +56,13 @@ class PartialRadialLayer(nn.Module):
     make_distribution: torch.jit.ScriptModule
     make_path_probs: torch.jit.ScriptModule
 
-    def __init__(self, input_width: int, depth: int, inner_width: int, spread_lambda: float = 1.0):
+    def __init__(self,
+                 input_width: int,
+                 depth: int,
+                 inner_width: int,
+                 spread_lambda: float = 1.0,
+                 quantile_history_weight: float = 0.3,
+                 load_balancing_lambda: float = 1.0):
         super().__init__()
 
         self.depth = depth
