@@ -10,7 +10,8 @@ from torch import nn
 from torch.nn import functional as F
 
 from radial_layer.model import PartialRadialLayer
-from .data.mnist import MNISTDataModule
+from radial_layer.power_layer import PowerLayer
+from experiments.data.mnist import MNISTDataModule
 
 
 class PartialRadialLayerMNISTClassifier(pl.LightningModule):
@@ -33,7 +34,12 @@ class PartialRadialLayerMNISTClassifier(pl.LightningModule):
         self.rl1.w_i.requires_grad=True
         self.bn = nn.BatchNorm1d(8)
         self.act_fn = nn.GELU()
-        self.rl2 = torch.jit.script(PartialRadialLayer(input_width=8, inner_width=10, depth=3, spread_lambda=1.0))
+        self.power_layer = PowerLayer(input_width=8, power=max_power)
+        self.rl2 = torch.jit.script(PartialRadialLayer(
+            input_width=8*max_power,
+            inner_width=10,
+            depth=layer2_depth,
+            spread_lambda=spread_lambda))
         self.rl2.a_i.requires_grad=True
         self.rl2.b_i.requires_grad=True
         self.rl2.w_i.requires_grad=True
@@ -52,6 +58,7 @@ class PartialRadialLayerMNISTClassifier(pl.LightningModule):
         x = self.rl1(x)
         x = self.bn(x)
         x = self.act_fn(x)
+        x = self.power_layer(x)
         rl2_spread_loss = self.rl2.spread_loss(x)
         x = self.rl2(x)
         x = self.out_fn(x)
@@ -68,6 +75,7 @@ class PartialRadialLayerMNISTClassifier(pl.LightningModule):
         x = self.rl1.eval_forward(x)
         x = self.bn(x)
         x = self.act_fn(x)
+        x = self.power_layer(x)
         x = self.rl2.eval_forward(x)
         x = self.out_fn(x)
 
