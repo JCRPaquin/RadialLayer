@@ -26,6 +26,10 @@ class PartialRadialLayerTests(unittest.TestCase):
 
         self.assertEqual(out_tensor.shape, (4, prl.inner_width))
 
+        out_tensor2 = prl.eval_forward(in_tensor)
+
+        self.assertEqual(out_tensor2.shape, (4, prl.inner_width))
+
     def test_ema_init(self):
         prl = self.create_prl()
         print(prl.ema_weights)
