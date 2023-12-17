@@ -86,6 +86,7 @@ class PartialRadialLayer(nn.Module):
         self.a_i = nn.Parameter(5 * torch.ones((1, 2 ** depth - 1)), requires_grad=False)
         self.w_i = nn.Parameter(torch.zeros((1, 2 ** depth - 1)), requires_grad=False)
         self.b_i = nn.Parameter(torch.ones((1, 2 ** depth - 1)), requires_grad=False)
+        self.quantile_history_weight = quantile_history_weight
 
         self.spread_lambda = spread_lambda
         self.spread_penalty_multiplier = nn.Parameter(torch.ones_like(self.b_i), requires_grad=False)
@@ -193,8 +194,9 @@ class PartialRadialLayer(nn.Module):
 
         if self.training:
             with torch.no_grad():
-                self.quantiles = 0.2*self.quantiles + \
-                                 0.8*angles.quantile(self.quantile_targets.view(-1)).view(self.quantiles.shape)
+                new_quantiles = angles.quantile(self.quantile_targets.view(-1)).view(self.quantiles.shape)
+                self.quantiles = self.quantile_history_weight*self.quantiles + \
+                                 (1-self.quantile_history_weight)*new_quantiles
 
         return angles
 
