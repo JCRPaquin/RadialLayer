@@ -7,7 +7,7 @@ from experiments.mnist_partial_radial import PartialRadialLayerMNISTClassifier
 
 class ExperimentTestCases(unittest.TestCase):
     def test_jit(self):
-        model = PartialRadialLayerMNISTClassifier(lr_rate=1e-3)
+        model = PartialRadialLayerMNISTClassifier(learning_rate=1e-3)
         model.eval()
 
         jit_rl1 = torch.jit.script(model.rl1)
