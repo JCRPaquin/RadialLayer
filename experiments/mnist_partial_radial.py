@@ -29,8 +29,8 @@ class PartialRadialLayerMNISTClassifier(pl.LightningModule):
                  phase_change_epoch: int = 10,
                  layer1_depth: int = 3,
                  layer2_depth: int = 3,
-                 spread_lambda: float = 10.,
-                 quantile_lambda: float = 5.,
+                 spread_lambda: float = 1.,
+                 quantile_lambda: float = 1.,
                  max_power: int = 4):
         super().__init__()
 
@@ -39,11 +39,11 @@ class PartialRadialLayerMNISTClassifier(pl.LightningModule):
             input_width=28*28,
             inner_width=8,
             depth=layer1_depth,
-            spread_lambda=spread_lambda))
+            spread_lambda=spread_lambda,
+            quantile_lambda=quantile_lambda))
         self.rl1.a_i.requires_grad=True
         self.rl1.b_i.requires_grad=True
         self.rl1.w_i.requires_grad=True
-        self.rl1.quantile_lambda = quantile_lambda
         self.bn = nn.BatchNorm1d(8)
         self.act_fn = nn.GELU()
         self.power_layer = PowerLayer(input_width=8, power=max_power)
@@ -51,15 +51,16 @@ class PartialRadialLayerMNISTClassifier(pl.LightningModule):
             input_width=8*max_power,
             inner_width=10,
             depth=layer2_depth,
-            spread_lambda=spread_lambda))
+            spread_lambda=spread_lambda,
+            quantile_lambda=quantile_lambda))
         self.rl2.a_i.requires_grad=True
         self.rl2.b_i.requires_grad=True
         self.rl2.w_i.requires_grad=True
-        self.rl2.quantile_lambda = quantile_lambda
         self.out_fn = nn.LogSoftmax()
 
         self.lr_rate = learning_rate
         self.phase_change_epoch = phase_change_epoch
+        self.phase_change_ready = []
 
     def forward(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         batch_size, channels, width, height = x.size()
