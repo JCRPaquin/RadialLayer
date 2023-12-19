@@ -4,5 +4,7 @@ torch_optimizer
 lightning
 wandb
 
+ray[tune]
+
 pandas
 plotly
