@@ -15,7 +15,6 @@ from experiments.data.mnist import MNISTDataModule
 
 
 class PartialRadialLayerMNISTClassifier(pl.LightningModule):
-
     rl1: PartialRadialLayer
     bn: nn.BatchNorm1d
     act_fn: nn.Module
@@ -31,31 +30,37 @@ class PartialRadialLayerMNISTClassifier(pl.LightningModule):
                  layer2_depth: int = 3,
                  spread_lambda: float = 1.,
                  quantile_lambda: float = 1.,
+                 quantile_history_weight: float = 0.3,
+                 load_balancing_lambda: float = 1.0,
                  max_power: int = 4):
         super().__init__()
 
         # mnist images are (1, 28, 28) (channels, width, height)
         self.rl1 = torch.jit.script(PartialRadialLayer(
-            input_width=28*28,
+            input_width=28 * 28,
             inner_width=8,
             depth=layer1_depth,
             spread_lambda=spread_lambda,
-            quantile_lambda=quantile_lambda))
-        self.rl1.a_i.requires_grad=True
-        self.rl1.b_i.requires_grad=True
-        self.rl1.w_i.requires_grad=True
+            quantile_lambda=quantile_lambda,
+            quantile_history_weight=quantile_history_weight,
+            load_balancing_lambda=load_balancing_lambda))
+        self.rl1.a_i.requires_grad = True
+        self.rl1.b_i.requires_grad = True
+        self.rl1.w_i.requires_grad = True
         self.bn = nn.BatchNorm1d(8)
         self.act_fn = nn.GELU()
         self.power_layer = PowerLayer(input_width=8, power=max_power)
         self.rl2 = torch.jit.script(PartialRadialLayer(
-            input_width=8*max_power,
+            input_width=8 * max_power,
             inner_width=10,
             depth=layer2_depth,
             spread_lambda=spread_lambda,
-            quantile_lambda=quantile_lambda))
-        self.rl2.a_i.requires_grad=True
-        self.rl2.b_i.requires_grad=True
-        self.rl2.w_i.requires_grad=True
+            quantile_lambda=quantile_lambda,
+            quantile_history_weight=quantile_history_weight,
+            load_balancing_lambda=load_balancing_lambda))
+        self.rl2.a_i.requires_grad = True
+        self.rl2.b_i.requires_grad = True
+        self.rl2.w_i.requires_grad = True
         self.out_fn = nn.LogSoftmax()
 
         self.lr_rate = learning_rate
@@ -118,7 +123,7 @@ class PartialRadialLayerMNISTClassifier(pl.LightningModule):
         self.log('train/spread_loss', spread_loss.detach().item())
         self.log('train/tree_loss', tree_loss.detach().item())
 
-        node_splits = F.sigmoid(self.rl1.b_i)/(0.5+F.sigmoid(self.rl1.w_i))
+        node_splits = F.sigmoid(self.rl1.b_i) / (0.5 + F.sigmoid(self.rl1.w_i))
         for i in range(node_splits.shape[1]):
             self.log(f'train/node_split_{i}', node_splits[0][i].detach().item())
 
@@ -127,17 +132,17 @@ class PartialRadialLayerMNISTClassifier(pl.LightningModule):
     def validation_step(self, val_batch, batch_idx):
         x, y = val_batch
 
-        buckets = self.rl1.scaled_distribution(x.view(-1, 28*28))
+        buckets = self.rl1.scaled_distribution(x.view(-1, 28 * 28))
         buckets = torch.argmax(buckets, dim=1)
 
-        angle_dist = self.rl1.angles(x.view(-1, 28*28)).unsqueeze(-1)
+        angle_dist = self.rl1.angles(x.view(-1, 28 * 28)).unsqueeze(-1)
 
         logits = self.eval_forward(x)
         loss = self.cross_entropy_loss(logits, y)
 
         distributions = torch.exp(logits)
         labels = torch.argmax(distributions, dim=1)
-        accuracy = (labels == y).sum()/x.shape[0]
+        accuracy = (labels == y).sum() / x.shape[0]
 
         self.log('val/hard_loss', loss.detach().item())
         self.log('val/accuracy', accuracy.detach().item())
@@ -154,11 +159,11 @@ class PartialRadialLayerMNISTClassifier(pl.LightningModule):
             else:
                 bucket_totals[bucket] = 1
 
-        for i in range(2**self.rl1.depth):
+        for i in range(2 ** self.rl1.depth):
             self.log(f'val/total_bucket_{i}', bucket_totals.get(i, 0))
 
         for i in range(self.rl1.quantiles.shape[-1]):
-            self.log(f'val/rl1_quantile_{i}', self.rl1.quantiles[0,i])
+            self.log(f'val/rl1_quantile_{i}', self.rl1.quantiles[0, i])
 
         return {"loss": loss}
 
@@ -174,7 +179,8 @@ class PartialRadialLayerMNISTClassifier(pl.LightningModule):
         optimizer = torch.optim.AdamW(self.parameters(), lr=self.lr_rate, weight_decay=0.01)
         lr_scheduler = {'scheduler': torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.95),
                         'name': 'expo_lr'}
-        return [optimizer], [] #[lr_scheduler]
+        return [optimizer], []  # [lr_scheduler]
+
 
 if __name__ == "__main__":
     # 2e-3 is too high
