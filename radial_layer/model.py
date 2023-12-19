@@ -61,6 +61,7 @@ class PartialRadialLayer(nn.Module):
                  depth: int,
                  inner_width: int,
                  spread_lambda: float = 1.0,
+                 quantile_lambda: float = 1.0,
                  quantile_history_weight: float = 0.3,
                  load_balancing_lambda: float = 1.0):
         super().__init__()
@@ -79,7 +80,7 @@ class PartialRadialLayer(nn.Module):
                                                example_inputs=torch.ones(2, 2**depth-1, requires_grad=True))
 
         self.ray = nn.Parameter(torch.zeros((1, input_width)), requires_grad=True)
-        self.quantile_lambda = 10.0
+        self.quantile_lambda = quantile_lambda
         nn.init.kaiming_normal_(self.ray)
 
         # Max derivative of sigmoid(a*(w*x + b)) is at -b/w
