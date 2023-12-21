@@ -1,11 +1,12 @@
 from typing import Tuple
 
-import pytorch_lightning as pl
+import lightning.pytorch as pl
 
 import torch
 import wandb
-from pytorch_lightning.callbacks import EarlyStopping
-from pytorch_lightning.loggers import WandbLogger
+from lightning.pytorch import LightningModule
+from lightning.pytorch.callbacks import EarlyStopping
+from lightning.pytorch.loggers import WandbLogger
 from torch import nn
 from torch.nn import functional as F
 
@@ -14,7 +15,7 @@ from radial_layer.power_layer import PowerLayer
 from experiments.data.mnist import MNISTDataModule
 
 
-class PartialRadialLayerMNISTClassifier(pl.LightningModule):
+class PartialRadialLayerMNISTClassifier(LightningModule):
     rl1: PartialRadialLayer
     bn: nn.BatchNorm1d
     act_fn: nn.Module
@@ -24,7 +25,7 @@ class PartialRadialLayerMNISTClassifier(pl.LightningModule):
     lr_rate: float
 
     def __init__(self,
-                 learning_rate: float,
+                 learning_rate: float = 1e-3,
                  phase_change_epoch: int = 10,
                  layer1_depth: int = 3,
                  layer2_depth: int = 3,
@@ -32,7 +33,8 @@ class PartialRadialLayerMNISTClassifier(pl.LightningModule):
                  quantile_lambda: float = 1.,
                  quantile_history_weight: float = 0.3,
                  load_balancing_lambda: float = 1.0,
-                 max_power: int = 4):
+                 max_power: int = 4,
+                 **kwargs):
         super().__init__()
 
         # mnist images are (1, 28, 28) (channels, width, height)
@@ -146,10 +148,12 @@ class PartialRadialLayerMNISTClassifier(pl.LightningModule):
 
         self.log('val/hard_loss', loss.detach().item())
         self.log('val/accuracy', accuracy.detach().item())
+        """
         self.logger.experiment.log({
             'val/rl1_dist_plot': wandb.Image(self.rl1.plot_distribution().T),
             'val/rl1_angle_plot': wandb.Histogram(angle_dist.view(-1))
         })
+        """
 
         bucket_totals = dict()
         for i in range(x.shape[0]):
