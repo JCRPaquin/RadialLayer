@@ -5,6 +5,7 @@ lightning
 wandb
 
 ray[tune]
+optuna
 
 pandas
 plotly
