@@ -158,7 +158,7 @@ class PartialRadialLayerMNISTClassifier(LightningModule):
                 bucket_totals[bucket] = 1
 
         for i in range(2 ** self.rl1.depth):
-            self.log(f'val/total_bucket_{i}', bucket_totals.get(i, 0), rank_zero_only=True)
+            self.log(f'val/total_bucket_{i}', float(bucket_totals.get(i, 0)), rank_zero_only=True)
 
         for i in range(self.rl1.quantiles.shape[-1]):
             self.log(f'val/rl1_quantile_{i}', self.rl1.quantiles[0, i], rank_zero_only=True)
