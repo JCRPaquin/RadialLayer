@@ -200,5 +200,5 @@ if __name__ == "__main__":
     wandb_logger.experiment.log_code(".")
 
     trainer = pl.Trainer(max_epochs=100, callbacks=[early_stopping],
-                         logger=wandb_logger)
+                         logger=wandb_logger, accelerator="cpu")
     trainer.fit(model, data)
