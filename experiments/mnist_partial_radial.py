@@ -46,9 +46,6 @@ class PartialRadialLayerMNISTClassifier(LightningModule):
             quantile_lambda=quantile_lambda,
             quantile_history_weight=quantile_history_weight,
             load_balancing_lambda=load_balancing_lambda))
-        self.rl1.a_i.requires_grad = True
-        self.rl1.b_i.requires_grad = True
-        self.rl1.w_i.requires_grad = True
         self.bn = nn.BatchNorm1d(8)
         self.act_fn = nn.GELU()
         self.power_layer = PowerLayer(input_width=8, power=max_power)
@@ -60,9 +57,6 @@ class PartialRadialLayerMNISTClassifier(LightningModule):
             quantile_lambda=quantile_lambda,
             quantile_history_weight=quantile_history_weight,
             load_balancing_lambda=load_balancing_lambda))
-        self.rl2.a_i.requires_grad = True
-        self.rl2.b_i.requires_grad = True
-        self.rl2.w_i.requires_grad = True
         self.out_fn = nn.LogSoftmax()
 
         self.lr_rate = learning_rate
