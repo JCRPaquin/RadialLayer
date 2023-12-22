@@ -38,14 +38,17 @@ class PartialRadialLayerMNISTClassifier(LightningModule):
         super().__init__()
 
         # mnist images are (1, 28, 28) (channels, width, height)
-        self.rl1 = torch.jit.script(PartialRadialLayer(
-            input_width=28 * 28,
-            inner_width=8,
-            depth=layer1_depth,
-            spread_lambda=spread_lambda,
-            quantile_lambda=quantile_lambda,
-            quantile_history_weight=quantile_history_weight,
-            load_balancing_lambda=load_balancing_lambda))
+        def input_radial_layer():
+            return torch.jit.script(PartialRadialLayer(
+                input_width=28 * 28,
+                inner_width=8,
+                depth=layer1_depth,
+                spread_lambda=spread_lambda,
+                quantile_lambda=quantile_lambda,
+                quantile_history_weight=quantile_history_weight,
+                load_balancing_lambda=load_balancing_lambda))
+
+        self.rl1 = input_radial_layer()
         self.bn = nn.BatchNorm1d(8)
         self.act_fn = nn.GELU()
         self.power_layer = PowerLayer(input_width=8, power=max_power)
