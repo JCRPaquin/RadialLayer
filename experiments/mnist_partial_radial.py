@@ -146,8 +146,8 @@ class PartialRadialLayerMNISTClassifier(LightningModule):
         labels = torch.argmax(distributions, dim=1)
         accuracy = (labels == y).sum() / x.shape[0]
 
-        self.log('val/hard_loss', loss.detach().item())
-        self.log('val/accuracy', accuracy.detach().item())
+        self.log('val/hard_loss', loss.detach().item(), sync_dist=True)
+        self.log('val/accuracy', accuracy.detach().item(), sync_dist=True)
         """
         self.logger.experiment.log({
             'val/rl1_dist_plot': wandb.Image(self.rl1.plot_distribution().T),
@@ -164,10 +164,10 @@ class PartialRadialLayerMNISTClassifier(LightningModule):
                 bucket_totals[bucket] = 1
 
         for i in range(2 ** self.rl1.depth):
-            self.log(f'val/total_bucket_{i}', bucket_totals.get(i, 0))
+            self.log(f'val/total_bucket_{i}', bucket_totals.get(i, 0), rank_zero_only=True)
 
         for i in range(self.rl1.quantiles.shape[-1]):
-            self.log(f'val/rl1_quantile_{i}', self.rl1.quantiles[0, i])
+            self.log(f'val/rl1_quantile_{i}', self.rl1.quantiles[0, i], rank_zero_only=True)
 
         return {"loss": loss}
 
